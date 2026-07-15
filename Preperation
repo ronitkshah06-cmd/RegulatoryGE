@@ -1,0 +1,103 @@
+{
+  "summary": "string",
+  "invoice_fields": {
+    "invoice_number": "string",
+    "vendor": "string",
+    "amount": "string",
+    "tax": "string",
+    "po_number": "string",
+    "line_items": ["string"],
+    "quantity": "string",
+    "due_date": "string",
+    "payment_terms": "string"
+  },
+  "po_fields": {
+    "po_number": "string",
+    "vendor": "string",
+    "approved_amount": "string",
+    "line_items": ["string"],
+    "quantity": "string",
+    "payment_terms": "string"
+  },
+  "mismatches": [
+    {
+      "field": "string",
+      "invoice_value": "string",
+      "po_value": "string",
+      "issue": "string",
+      "severity": "Low | Medium | High"
+    }
+  ],
+  "missing_information": ["string"],
+  "overall_severity": "Low | Medium | High",
+  "recommended_action": "string",
+  "internal_note": "string",
+  "vendor_email": "string",
+  "disclaimer": "string"
+}
+"""
+
+
+def build_user_prompt(
+    invoice_text: str,
+    po_text: str,
+    receipt_text: str,
+    output_mode: str,
+) -> str:
+    """Assemble the user message sent alongside the system prompt.
+
+    output_mode is one of "AP Analyst", "Manager Summary", "Vendor Email"
+    and nudges tone/emphasis without changing the required JSON schema.
+    """
+    receipt_section = receipt_text.strip() or "No goods receipt text provided."
+
+    mode_guidance = {
+        "AP Analyst": (
+            "Optimize the summary and internal_note for an Accounts "
+            "Payable analyst doing first-pass review: be specific about "
+            "which fields differ and why it matters for payment timing."
+        ),
+        "Manager Summary": (
+            "Optimize the summary for a Finance Manager scanning quickly: "
+            "lead with overall risk and the single most important issue, "
+            "keep it concise."
+        ),
+        "Vendor Email": (
+            "Put extra care into the vendor_email field: it should read "
+            "as a polite, professional clarification request a vendor "
+            "would receive, referencing the specific mismatch."
+        ),
+    }.get(output_mode, "")
+
+    return f"""Reconcile the following synthetic invoice against the synthetic \
+purchase order and optional goods receipt note. {mode_guidance}
+
+INVOICE TEXT:
+{invoice_text.strip()}
+
+PURCHASE ORDER TEXT:
+{po_text.strip()}
+
+GOODS RECEIPT / DELIVERY NOTE TEXT:
+{receipt_section}
+
+Return only the JSON object described in the system instructions.
+"""
+
+
+def build_messages(
+    invoice_text: str,
+    po_text: str,
+    receipt_text: str,
+    output_mode: str,
+) -> list[dict[str, str]]:
+    """Build the full messages list for the OpenRouter chat completion call."""
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": build_user_prompt(
+                invoice_text, po_text, receipt_text, output_mode
+            ),
+        },
+    ]
